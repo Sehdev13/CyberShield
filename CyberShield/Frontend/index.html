@@ -1,0 +1,1286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>CyberShield — Threat Detection</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><polygon points='50,5 95,27.5 95,72.5 50,95 5,72.5 5,27.5' fill='%2300e5ff'/><path d='M50 25 L50 55 M50 62 L50 68' stroke='%23000' stroke-width='8' stroke-linecap='round'/></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Syne:wght@400;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #080c10;
+    --surface: #0d1117;
+    --panel: #111820;
+    --border: #1e2d3d;
+    --accent: #00e5ff;
+    --accent2: #ff3366;
+    --warn: #ffaa00;
+    --safe: #00ff88;
+    --text: #c9d1d9;
+    --muted: #4a5568;
+    --mono: 'Share Tech Mono', monospace;
+    --sans: 'Syne', sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+  * { scrollbar-width: thin; scrollbar-color: var(--border) var(--bg); }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Grid noise texture overlay */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(0,229,255,0.02) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,229,255,0.02) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* Ambient glow top-left */
+  body::after {
+    content: '';
+    position: fixed;
+    top: -200px;
+    left: -200px;
+    width: 600px;
+    height: 600px;
+    background: radial-gradient(circle, rgba(0,229,255,0.05) 0%, transparent 70%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* ── Header ── */
+  header {
+    position: relative;
+    z-index: 10;
+    border-bottom: 1px solid var(--border);
+    padding: 0 2rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 64px;
+    background: rgba(8,12,16,0.9);
+    backdrop-filter: blur(12px);
+  }
+
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-family: var(--sans);
+    font-weight: 800;
+    font-size: 1.1rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #fff;
+  }
+
+  .logo-icon {
+    width: 32px;
+    height: 32px;
+    background: var(--accent);
+    clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+    display: grid;
+    place-items: center;
+    animation: pulse-glow 3s ease-in-out infinite;
+  }
+
+  @keyframes pulse-glow {
+    0%, 100% { box-shadow: 0 0 0px var(--accent); filter: brightness(1); }
+    50% { box-shadow: 0 0 20px var(--accent); filter: brightness(1.3); }
+  }
+
+  .logo-icon svg { width: 16px; height: 16px; fill: #000; }
+
+  .status-bar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    color: var(--safe);
+  }
+
+  .status-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--safe);
+    animation: blink 2s ease-in-out infinite;
+  }
+
+  @keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+
+  /* ── Layout ── */
+  .layout {
+    position: relative;
+    z-index: 1;
+    display: grid;
+    grid-template-columns: 420px 1fr;
+    grid-template-rows: auto auto 1fr;
+    gap: 0;
+    height: calc(100vh - 64px);
+    overflow: hidden;
+  }
+
+  /* ── Left panel (form) ── */
+  .form-panel {
+    grid-row: 1 / 4;
+    border-right: 1px solid var(--border);
+    padding: 2rem;
+    overflow-y: auto;
+  }
+
+  .panel-title {
+    font-family: var(--mono);
+    font-size: 0.65rem;
+    letter-spacing: 0.2em;
+    color: var(--accent);
+    text-transform: uppercase;
+    margin-bottom: 1.5rem;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .panel-title::before {
+    content: '';
+    display: inline-block;
+    width: 20px;
+    height: 1px;
+    background: var(--accent);
+  }
+
+  .section-label {
+    font-family: var(--mono);
+    font-size: 0.6rem;
+    color: var(--muted);
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    margin: 1.5rem 0 0.75rem;
+    padding-bottom: 0.4rem;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .field {
+    margin-bottom: 1rem;
+  }
+
+  label {
+    display: block;
+    font-family: var(--mono);
+    font-size: 0.65rem;
+    color: var(--muted);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin-bottom: 0.35rem;
+  }
+
+  input, select {
+    width: 100%;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 0.55rem 0.75rem;
+    font-family: var(--mono);
+    font-size: 0.8rem;
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    border-radius: 2px;
+  }
+
+  input:focus, select:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px rgba(0,229,255,0.1);
+  }
+
+  select option { background: var(--surface); }
+
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+
+  .toggle-field {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    padding: 0.55rem 0.75rem;
+    border-radius: 2px;
+  }
+
+  .toggle-label {
+    font-family: var(--mono);
+    font-size: 0.75rem;
+    color: var(--text);
+  }
+
+  .toggle {
+    position: relative;
+    width: 40px;
+    height: 20px;
+    cursor: pointer;
+  }
+
+  .toggle input { opacity: 0; width: 0; height: 0; }
+
+  .slider {
+    position: absolute;
+    inset: 0;
+    background: var(--border);
+    border-radius: 20px;
+    transition: background 0.3s;
+  }
+
+  .slider::before {
+    content: '';
+    position: absolute;
+    width: 14px; height: 14px;
+    background: #fff;
+    border-radius: 50%;
+    top: 3px; left: 3px;
+    transition: transform 0.3s;
+  }
+
+  .toggle input:checked + .slider { background: var(--accent); }
+  .toggle input:checked + .slider::before { transform: translateX(20px); }
+
+  /* Presets */
+  .presets {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin-bottom: 1.2rem;
+  }
+
+  .preset-btn {
+    font-family: var(--mono);
+    font-size: 0.6rem;
+    padding: 0.3rem 0.6rem;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    transition: all 0.2s;
+    border-radius: 2px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .preset-btn:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: rgba(0,229,255,0.05);
+  }
+
+  .preset-btn.attack { border-color: rgba(255,51,102,0.3); color: rgba(255,51,102,0.7); }
+  .preset-btn.attack:hover { border-color: var(--accent2); color: var(--accent2); background: rgba(255,51,102,0.05); }
+  .preset-btn.random { border-color: rgba(255,170,0,0.3); color: rgba(255,170,0,0.7); }
+  .preset-btn.random:hover { border-color: var(--warn); color: var(--warn); background: rgba(255,170,0,0.05); }
+  .random-solo { width: 100%; margin-bottom: 1rem; letter-spacing: 0.1em; }
+
+  /* Submit button */
+  .submit-btn {
+    width: 100%;
+    margin-top: 1.5rem;
+    padding: 0.9rem;
+    background: transparent;
+    border: 1px solid var(--accent);
+    color: var(--accent);
+    font-family: var(--sans);
+    font-weight: 700;
+    font-size: 0.85rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative;
+    overflow: hidden;
+    border-radius: 2px;
+  }
+
+  .submit-btn::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: var(--accent);
+    transform: translateX(-100%);
+    transition: transform 0.3s ease;
+    z-index: -1;
+  }
+
+  .submit-btn:hover::before { transform: translateX(0); }
+  .submit-btn:hover { color: #000; }
+  .submit-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .submit-btn:disabled::before { transform: translateX(-100%); }
+  .submit-btn:disabled:hover { color: var(--accent); }
+
+  .submit-btn .spinner {
+    display: inline-block;
+    width: 12px; height: 12px;
+    border: 2px solid currentColor;
+    border-top-color: transparent;
+    border-radius: 50%;
+    animation: spin 0.6s linear infinite;
+    vertical-align: middle;
+    margin-right: 6px;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── Result panel (compact horizontal) ── */
+  .result-panel {
+    border-bottom: 1px solid var(--border);
+    padding: 1.25rem 2rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 180px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .result-idle {
+    text-align: center;
+    color: var(--muted);
+  }
+
+  .result-idle .idle-icon {
+    font-size: 2rem;
+    margin-bottom: 0.6rem;
+    opacity: 0.3;
+  }
+
+  .result-idle p {
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  .result-card {
+    display: none;
+    width: 100%;
+    animation: fadeUp 0.5s ease forwards;
+  }
+
+  .result-inner {
+    display: flex;
+    align-items: center;
+    gap: 2rem;
+  }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .threat-label {
+    font-family: var(--sans);
+    font-weight: 800;
+    font-size: 1.5rem;
+    letter-spacing: 0.04em;
+    margin-bottom: 0.3rem;
+    text-transform: uppercase;
+  }
+
+  .threat-label.attack { color: var(--accent2); text-shadow: 0 0 20px rgba(255,51,102,0.35); }
+  .threat-label.safe { color: var(--safe); text-shadow: 0 0 20px rgba(0,255,136,0.35); }
+
+  .prob-display {
+    font-family: var(--mono);
+    font-size: 0.8rem;
+    color: var(--muted);
+    margin-bottom: 0.75rem;
+  }
+
+  .prob-display span { color: var(--text); font-size: 0.9rem; }
+
+  /* Risk bar */
+  .risk-bar-wrap { width: 220px; }
+  .risk-bar-track {
+    height: 6px;
+    background: var(--border);
+    border-radius: 3px;
+    overflow: hidden;
+    margin-bottom: 4px;
+  }
+  .risk-bar-fill {
+    height: 100%;
+    width: 0%;
+    border-radius: 3px;
+    transition: width 0.8s cubic-bezier(0.34,1.2,0.64,1), background 0.4s;
+  }
+  .risk-zones {
+    display: flex;
+    justify-content: space-between;
+    font-family: var(--mono);
+    font-size: 0.55rem;
+    letter-spacing: 0.08em;
+    opacity: 0.6;
+  }
+
+  /* Probability gauge */
+  .gauge-wrap {
+    flex-shrink: 0;
+    overflow: visible;
+  }
+
+  .gauge-track {
+    fill: none;
+    stroke: var(--border);
+    stroke-width: 12;
+    stroke-linecap: round;
+  }
+
+  .gauge-fill {
+    fill: none;
+    stroke-width: 12;
+    stroke-linecap: round;
+    transition: stroke-dashoffset 0.8s cubic-bezier(0.34,1.56,0.64,1), stroke 0.5s;
+    stroke-dasharray: 314;
+    stroke-dashoffset: 314;
+  }
+
+  .gauge-value {
+    font-family: var(--mono);
+    font-size: 1.4rem;
+    fill: var(--text);
+    text-anchor: middle;
+    dominant-baseline: middle;
+  }
+
+  .gauge-sub {
+    font-family: var(--mono);
+    font-size: 0.55rem;
+    fill: var(--muted);
+    text-anchor: middle;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  /* ── Tabbed bottom panel ── */
+  .tabbed-panel {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    flex: 1;
+  }
+
+  .tab-header {
+    display: flex;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+
+  .tab-btn {
+    font-family: var(--mono);
+    font-size: 0.65rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    padding: 0.65rem 1.5rem;
+    background: transparent;
+    border: none;
+    color: var(--muted);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: color 0.2s, border-color 0.2s;
+    margin-bottom: -1px;
+  }
+
+  .tab-btn:hover { color: var(--text); }
+  .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+  .tab-content {
+    padding: 1.25rem 1.75rem;
+    overflow-y: auto;
+    flex: 1;
+  }
+
+  /* Log entries */
+  .log-entry {
+    display: grid;
+    grid-template-columns: auto 90px 1fr auto;
+    gap: 1rem;
+    align-items: center;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid transparent;
+    margin-bottom: 0.35rem;
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    transition: border-color 0.2s;
+    animation: fadeIn 0.3s ease;
+    border-radius: 2px;
+  }
+
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+  .log-entry:hover { border-color: var(--border); background: rgba(255,255,255,0.02); }
+  .log-entry.attack-entry { background: rgba(255,51,102,0.04); }
+  .log-entry.safe-entry { background: rgba(0,255,136,0.03); }
+
+  .log-time { color: var(--muted); white-space: nowrap; }
+
+  .log-badge {
+    padding: 0.2rem 0.5rem;
+    border-radius: 2px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-size: 0.6rem;
+    font-weight: 600;
+    text-align: center;
+  }
+
+  .log-badge.attack { background: rgba(255,51,102,0.15); color: var(--accent2); border: 1px solid rgba(255,51,102,0.3); }
+  .log-badge.safe { background: rgba(0,255,136,0.1); color: var(--safe); border: 1px solid rgba(0,255,136,0.2); }
+
+  .log-info { color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  .log-prob { color: var(--muted); white-space: nowrap; text-align: right; }
+  .log-prob.high { color: var(--accent2); }
+  .log-prob.medium { color: var(--warn); }
+  .log-prob.low { color: var(--safe); }
+
+  .empty-log {
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    color: var(--muted);
+    text-align: center;
+    padding: 2rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  /* ── Model Info tab ── */
+  .model-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.25rem;
+  }
+
+  .model-section {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    padding: 1rem 1.1rem;
+  }
+
+  .model-section-title {
+    font-family: var(--mono);
+    font-size: 0.6rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 0.85rem;
+    padding-bottom: 0.4rem;
+    border-bottom: 1px solid var(--border);
+  }
+
+  /* Metric bars */
+  .metric-row {
+    display: grid;
+    grid-template-columns: 130px 1fr 44px;
+    align-items: center;
+    gap: 0.6rem;
+    margin-bottom: 0.55rem;
+  }
+  .metric-label { font-family: var(--mono); font-size: 0.65rem; color: var(--muted); }
+  .metric-bar-wrap { height: 4px; background: var(--border); border-radius: 2px; overflow: hidden; }
+  .metric-bar { height: 100%; border-radius: 2px; }
+  .metric-val { font-family: var(--mono); font-size: 0.65rem; text-align: right; }
+
+  /* Param grid */
+  .param-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.4rem 0.75rem; }
+  .param-item { display: flex; flex-direction: column; gap: 1px; }
+  .param-key { font-family: var(--mono); font-size: 0.58rem; color: var(--muted); letter-spacing: 0.05em; }
+  .param-val { font-family: var(--mono); font-size: 0.7rem; color: var(--text); }
+  .param-val.accent { color: var(--accent); }
+
+  /* Feature importance */
+  .feat-list { display: flex; flex-direction: column; gap: 0.6rem; }
+  .feat-item { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+  .feat-item .feat-name { font-family: var(--mono); font-size: 0.65rem; color: var(--text); grid-column: 1; }
+  .feat-item .feat-pct { font-family: var(--mono); font-size: 0.6rem; color: var(--muted); grid-column: 2; text-align: right; }
+  .feat-item .feat-bar {
+    grid-column: 1 / -1;
+    height: 5px;
+    background: linear-gradient(90deg, var(--accent), rgba(0,229,255,0.2));
+    border-radius: 2px;
+    max-width: 100%;
+    margin-top: -2px;
+  }
+
+  /* Comparison table */
+  .compare-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: var(--mono);
+    font-size: 0.68rem;
+    margin-bottom: 0.75rem;
+  }
+  .compare-table th {
+    text-align: left;
+    color: var(--muted);
+    font-size: 0.58rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 0 0 0.4rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .compare-table td { padding: 0.35rem 0; color: var(--muted); border-bottom: 1px solid rgba(30,45,61,0.5); }
+  .compare-table tr.winner td { color: var(--text); font-weight: 600; }
+  .model-note {
+    font-family: var(--mono);
+    font-size: 0.6rem;
+    color: var(--muted);
+    line-height: 1.6;
+    border-left: 2px solid var(--border);
+    padding-left: 0.6rem;
+  }
+
+  .empty-log {
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    color: var(--muted);
+    text-align: center;
+    padding: 2rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  /* Alert flash */
+  .alert-flash {
+    position: fixed;
+    top: 80px;
+    right: 2rem;
+    z-index: 100;
+    padding: 0.75rem 1.25rem;
+    border-radius: 2px;
+    font-family: var(--mono);
+    font-size: 0.75rem;
+    letter-spacing: 0.08em;
+    transform: translateX(120%);
+    transition: transform 0.3s ease;
+    border-left: 3px solid;
+  }
+
+  .alert-flash.show { transform: translateX(0); }
+  .alert-flash.attack-alert { background: rgba(255,51,102,0.15); border-color: var(--accent2); color: var(--accent2); }
+  .alert-flash.safe-alert { background: rgba(0,255,136,0.1); border-color: var(--safe); color: var(--safe); }
+
+  /* Stats row */
+  .stats-row {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    border-bottom: 1px solid var(--border);
+    border-right: 0;
+  }
+
+  .stat-cell {
+    padding: 1rem 1.5rem;
+    border-right: 1px solid var(--border);
+    text-align: center;
+  }
+
+  .stat-cell:last-child { border-right: none; }
+
+  .stat-num {
+    font-family: var(--mono);
+    font-size: 1.6rem;
+    font-weight: 600;
+    line-height: 1;
+    margin-bottom: 0.25rem;
+  }
+
+  .stat-num.attacks { color: var(--accent2); }
+  .stat-num.safe { color: var(--safe); }
+  .stat-num.total { color: var(--accent); }
+
+  .stat-lbl {
+    font-family: var(--mono);
+    font-size: 0.55rem;
+    color: var(--muted);
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+  }
+
+  /* Error state */
+  .error-msg {
+    color: var(--warn);
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    margin-top: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    background: rgba(255,170,0,0.08);
+    border: 1px solid rgba(255,170,0,0.2);
+    border-radius: 2px;
+    display: none;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-icon">
+      <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+        <path d="M12 2L3 7v5c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-9-5z"/>
+      </svg>
+    </div>
+    CyberShield
+  </div>
+  <div class="status-bar">
+    <div class="status-dot"></div>
+    MODEL ACTIVE · XGBoost v1 · Threshold <span id="thresholdDisplay">0.50</span>
+  </div>
+</header>
+
+<div class="layout">
+
+  <!-- Left: Input Form -->
+  <aside class="form-panel">
+    <div class="panel-title">Packet Analysis</div>
+
+    <div class="presets">
+      <button class="preset-btn attack" onclick="loadPreset('sqlmap')">SQL Injection</button>
+      <button class="preset-btn attack" onclick="loadPreset('bruteforce')">Brute Force</button>
+      <button class="preset-btn attack" onclick="loadPreset('pyvuln')">SMB Probe</button>
+      <button class="preset-btn" onclick="loadPreset('normal')">Normal</button>
+      <button class="preset-btn" onclick="loadPreset('db')">Internal DB</button>
+      <button class="preset-btn" onclick="loadPreset('mobile')">Mobile</button>
+      <button class="preset-btn" onclick="loadPreset('largedl')">Large Download</button>
+    </div>
+    <button class="preset-btn random random-solo" onclick="loadRandom()">⚄ Generate Random Packet</button>
+
+    <div class="section-label">Network Identifiers</div>
+
+    <div class="row2">
+      <div class="field">
+        <label>Source IP</label>
+        <input type="text" id="src_ip" value="192.168.1.10" placeholder="0.0.0.0">
+      </div>
+      <div class="field">
+        <label>Destination IP</label>
+        <input type="text" id="dst_ip" value="8.8.8.8" placeholder="0.0.0.0">
+      </div>
+    </div>
+
+    <div class="row2">
+      <div class="field">
+        <label>Source Port</label>
+        <input type="number" id="src_port" value="51234">
+      </div>
+      <div class="field">
+        <label>Destination Port</label>
+        <input type="number" id="dst_port" value="443">
+      </div>
+    </div>
+
+    <div class="section-label">Traffic Details</div>
+
+    <div class="row2">
+      <div class="field">
+        <label>Protocol</label>
+        <select id="protocol">
+          <option value="TCP">TCP</option>
+          <option value="UDP">UDP</option>
+          <option value="ICMP">ICMP</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Timestamp</label>
+        <input type="datetime-local" id="timestamp" value="2026-03-21T12:00">
+      </div>
+    </div>
+
+    <div class="row2">
+      <div class="field">
+        <label>Bytes Sent</label>
+        <input type="number" id="bytes_sent" value="1200">
+      </div>
+      <div class="field">
+        <label>Bytes Received</label>
+        <input type="number" id="bytes_received" value="15000">
+      </div>
+    </div>
+
+    <div class="section-label">Request Info</div>
+
+    <div class="field">
+      <label>User Agent</label>
+      <input type="text" id="user_agent" value="Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0">
+    </div>
+
+    <div class="field">
+      <label>URL</label>
+      <input type="text" id="url" value="https://google.com">
+    </div>
+
+    <div class="field" style="margin-top:1rem">
+      <div class="toggle-field">
+        <span class="toggle-label">Internal Traffic</span>
+        <label class="toggle">
+          <input type="checkbox" id="is_internal_traffic">
+          <span class="slider"></span>
+        </label>
+      </div>
+    </div>
+
+    <div id="errorMsg" class="error-msg"></div>
+
+    <button class="submit-btn" id="submitBtn" onclick="submitPrediction()">
+      Analyze Packet
+    </button>
+  </aside>
+
+  <!-- Right top: stats -->
+  <div class="stats-row">
+    <div class="stat-cell">
+      <div class="stat-num total" id="statTotal">0</div>
+      <div class="stat-lbl">Total Analyzed</div>
+    </div>
+    <div class="stat-cell">
+      <div class="stat-num attacks" id="statAttacks">0</div>
+      <div class="stat-lbl">Threats Detected</div>
+    </div>
+    <div class="stat-cell">
+      <div class="stat-num safe" id="statSafe">0</div>
+      <div class="stat-lbl">Clean Traffic</div>
+    </div>
+  </div>
+
+  <!-- Right middle: compact result -->
+  <div class="result-panel">
+    <div class="result-idle" id="idleState">
+      <div class="idle-icon">⬡</div>
+      <p>Submit a packet to begin analysis</p>
+    </div>
+
+    <div class="result-card" id="resultCard">
+      <div class="result-inner">
+        <!-- Gauge -->
+        <div class="gauge-wrap">
+          <svg viewBox="0 0 200 110" xmlns="http://www.w3.org/2000/svg" style="width:140px; overflow:visible">
+            <path class="gauge-track" d="M 20 100 A 80 80 0 0 1 180 100"/>
+            <path class="gauge-fill" id="gaugeFill" d="M 20 100 A 80 80 0 0 1 180 100"/>
+            <text class="gauge-value" x="100" y="85" id="gaugeValue">0%</text>
+            <text class="gauge-sub" x="100" y="100">probability</text>
+          </svg>
+        </div>
+        <!-- Label + confidence -->
+        <div class="result-text">
+          <div class="threat-label" id="threatLabel">—</div>
+          <div class="prob-display">Threat probability: <span id="probValue">—</span></div>
+          <div class="risk-bar-wrap">
+            <div class="risk-bar-track"><div class="risk-bar-fill" id="riskBarFill"></div></div>
+            <div class="risk-zones">
+              <span style="color:var(--safe)">LOW</span>
+              <span style="color:var(--warn)">MED</span>
+              <span style="color:var(--accent2)">HIGH</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Right bottom: tabbed panel -->
+  <div class="tabbed-panel">
+    <div class="tab-header">
+      <button class="tab-btn active" onclick="switchTab('log')">Analysis Log</button>
+      <button class="tab-btn" onclick="switchTab('model')">Model Info</button>
+    </div>
+
+    <!-- Log tab -->
+    <div class="tab-content" id="tab-log">
+      <div id="logContainer">
+        <div class="empty-log">No analyses yet — submit a packet above</div>
+      </div>
+    </div>
+
+    <!-- Model info tab -->
+    <div class="tab-content" id="tab-model" style="display:none">
+      <div class="model-grid">
+
+        <div class="model-section">
+          <div class="model-section-title">Model Performance</div>
+          <div class="metric-row">
+            <span class="metric-label">Accuracy</span>
+            <div class="metric-bar-wrap"><div class="metric-bar" style="width:97%; background:var(--safe)"></div></div>
+            <span class="metric-val" style="color:var(--safe)">97%</span>
+          </div>
+          <div class="metric-row">
+            <span class="metric-label">F1 Score (Attack)</span>
+            <div class="metric-bar-wrap"><div class="metric-bar" style="width:63%; background:var(--warn)"></div></div>
+            <span class="metric-val" style="color:var(--warn)">63%</span>
+          </div>
+          <div class="metric-row">
+            <span class="metric-label">Precision (Attack)</span>
+            <div class="metric-bar-wrap"><div class="metric-bar" style="width:67%; background:var(--warn)"></div></div>
+            <span class="metric-val" style="color:var(--warn)">67%</span>
+          </div>
+          <div class="metric-row">
+            <span class="metric-label">Recall (Attack)</span>
+            <div class="metric-bar-wrap"><div class="metric-bar" style="width:60%; background:var(--warn)"></div></div>
+            <span class="metric-val" style="color:var(--warn)">60%</span>
+          </div>
+          <div class="metric-row">
+            <span class="metric-label">ROC-AUC</span>
+            <div class="metric-bar-wrap"><div class="metric-bar" style="width:88%; background:var(--safe)"></div></div>
+            <span class="metric-val" style="color:var(--safe)">~0.88</span>
+          </div>
+        </div>
+
+        <div class="model-section">
+          <div class="model-section-title">Hyperparameters</div>
+          <div class="param-grid">
+            <div class="param-item"><span class="param-key">Algorithm</span><span class="param-val">XGBoost</span></div>
+            <div class="param-item"><span class="param-key">n_estimators</span><span class="param-val accent">833</span></div>
+            <div class="param-item"><span class="param-key">max_depth</span><span class="param-val accent">6</span></div>
+            <div class="param-item"><span class="param-key">learning_rate</span><span class="param-val accent">0.04</span></div>
+            <div class="param-item"><span class="param-key">colsample_bytree</span><span class="param-val accent">0.7</span></div>
+            <div class="param-item"><span class="param-key">min_child_weight</span><span class="param-val accent">3</span></div>
+            <div class="param-item"><span class="param-key">subsample</span><span class="param-val accent">1.0</span></div>
+            <div class="param-item"><span class="param-key">gamma</span><span class="param-val accent">0</span></div>
+            <div class="param-item"><span class="param-key">Threshold</span><span class="param-val" style="color:var(--accent2)">0.506</span></div>
+            <div class="param-item"><span class="param-key">Class balance</span><span class="param-val">scale_pos_weight</span></div>
+            <div class="param-item"><span class="param-key">CV strategy</span><span class="param-val">StratifiedKFold 5</span></div>
+            <div class="param-item"><span class="param-key">Tuning metric</span><span class="param-val">F1 + logloss</span></div>
+          </div>
+        </div>
+
+        <div class="model-section">
+          <div class="model-section-title">Top Features Used</div>
+          <div class="feat-list">
+            <div class="feat-item"><span class="feat-name">src_port_category_System</span><span class="feat-pct">~10.5%</span><div class="feat-bar" style="width:100%"></div></div>
+            <div class="feat-item"><span class="feat-name">dst_port_category_System</span><span class="feat-pct">~10.0%</span><div class="feat-bar" style="width:95%"></div></div>
+            <div class="feat-item"><span class="feat-name">riskAgent</span><span class="feat-pct">~7.5%</span><div class="feat-bar" style="width:72%"></div></div>
+            <div class="feat-item"><span class="feat-name">dst_port_category_Registered</span><span class="feat-pct">~6.3%</span><div class="feat-bar" style="width:60%"></div></div>
+            <div class="feat-item"><span class="feat-name">src_port_category_Dynamic</span><span class="feat-pct">~6.1%</span><div class="feat-bar" style="width:58%"></div></div>
+          </div>
+        </div>
+
+        <div class="model-section">
+          <div class="model-section-title">Model Comparison</div>
+          <table class="compare-table">
+            <thead><tr><th>Model</th><th>Accuracy</th><th>F1 (Attack)</th></tr></thead>
+            <tbody>
+              <tr><td>Logistic Regression</td><td>81%</td><td>0.23</td></tr>
+              <tr><td>Random Forest</td><td>96%</td><td>0.39</td></tr>
+              <tr class="winner"><td>XGBoost ✓</td><td style="color:var(--safe)">97%</td><td style="color:var(--safe)">0.63</td></tr>
+            </tbody>
+          </table>
+          <div class="model-note">Threshold tuned via 5-fold cross-validation to maximize F1 on the attack class. Early stopping used to find optimal n_estimators=833.</div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Alert toast -->
+<div class="alert-flash" id="alertFlash"></div>
+
+<script>
+  function switchTab(name) {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(c => c.style.display = 'none');
+    document.getElementById('tab-' + name).style.display = 'block';
+    event.target.classList.add('active');
+  }
+
+  function setRiskBar(prob, isAttack) {
+    const fill = document.getElementById('riskBarFill');
+    fill.style.width = (prob * 100) + '%';
+    fill.style.background = prob >= 0.7
+      ? 'var(--accent2)'
+      : prob >= 0.4
+      ? 'var(--warn)'
+      : 'var(--safe)';
+  }
+
+  const presets = {
+    sqlmap: {
+      src_ip: "1.1.1.1", dst_ip: "2.2.2.2",
+      src_port: 58231, dst_port: 80, protocol: "TCP",
+      bytes_sent: 1500, bytes_received: 3000,
+      user_agent: "Mozilla/5.0 (compatible; sqlmap/1.7)",
+      url: "https://webmail.corp/login?id=1",
+      is_internal_traffic: false,
+      timestamp: "2026-03-21T10:00"
+    },
+    bruteforce: {
+      src_ip: "45.33.22.11", dst_ip: "2.2.2.2",
+      src_port: 33210, dst_port: 22, protocol: "TCP",
+      bytes_sent: 200, bytes_received: 200,
+      user_agent: "curl/7.81.0",
+      url: "ssh://server",
+      is_internal_traffic: false,
+      timestamp: "2026-03-22T02:15"
+    },
+
+    normal: {
+      src_ip: "192.168.1.10", dst_ip: "8.8.8.8",
+      src_port: 51234, dst_port: 443, protocol: "TCP",
+      bytes_sent: 1200, bytes_received: 15000,
+      user_agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0",
+      url: "https://google.com",
+      is_internal_traffic: false,
+      timestamp: "2026-03-21T12:00"
+    },
+    db: {
+      src_ip: "10.0.0.5", dst_ip: "10.0.0.10",
+      src_port: 49500, dst_port: 5432, protocol: "TCP",
+      bytes_sent: 8000, bytes_received: 12000,
+      user_agent: "PostgreSQL-JDBC-Driver",
+      url: "none",
+      is_internal_traffic: true,
+      timestamp: "2026-03-21T09:00"
+    },
+    pyvuln: {
+      src_ip: "192.168.1.50", dst_ip: "10.0.0.1",
+      src_port: 44321, dst_port: 445, protocol: "TCP",
+      bytes_sent: 500, bytes_received: 100,
+      user_agent: "python-requests/2.28",
+      url: "https://portal.example.org/",
+      is_internal_traffic: true,
+      timestamp: "2026-03-21T23:30"
+    },
+    largedl: {
+      src_ip: "192.168.1.15", dst_ip: "205.251.242.103",
+      src_port: 52000, dst_port: 443, protocol: "TCP",
+      bytes_sent: 5000, bytes_received: 1000000,
+      user_agent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)",
+      url: "https://aws.amazon.com/download",
+      is_internal_traffic: false,
+      timestamp: "2026-03-21T15:00"
+    },
+    mobile: {
+      src_ip: "172.16.0.5", dst_ip: "93.184.216.34",
+      src_port: 55000, dst_port: 443, protocol: "TCP",
+      bytes_sent: 450, bytes_received: 2100,
+      user_agent: "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0) Safari/604.1",
+      url: "https://example.org",
+      is_internal_traffic: false,
+      timestamp: "2026-03-21T20:00"
+    }
+  };
+
+  function randInt(min, max) { return Math.floor(Math.random() * (max - min + 1)) + min; }
+  function randChoice(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+
+  function loadRandom() {
+    const attackMode = Math.random() > 0.5;
+
+    const attackAgents = [
+      "sqlmap/1.7", "python-requests/2.28", "curl/7.81.0",
+      "zgrab/0.x", "python-urllib/3.9", "python-requests/2.31.0"
+    ];
+    const normalAgents = [
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0",
+      "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0) Safari/604.1",
+      "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Chrome/119.0.0.0",
+      "Mozilla/5.0 (X11; Linux x86_64) Firefox/121.0",
+      "PostgreSQL-JDBC-Driver"
+    ];
+
+    // System ports (0-1023) heavily weighted for attacks since they're top features
+    const systemPorts  = [21, 22, 23, 25, 53, 80, 110, 143, 443, 445, 3306, 8080];
+    const dynamicPorts = () => randInt(49152, 65535);
+    const registeredPorts = () => randInt(1024, 49151);
+
+    const srcPort = attackMode
+      ? randChoice(systemPorts)
+      : dynamicPorts();
+    const dstPort = attackMode
+      ? randChoice(systemPorts)
+      : randChoice([443, 80, 8080]);
+
+    const externalIPs = ["1.1.1.1","45.33.22.11","88.77.66.55","198.51.100.42","203.0.113.17"];
+    const internalIPs = ["192.168.1.50","10.0.0.5","172.16.0.10","10.10.1.33"];
+
+    const isInternal = attackMode ? Math.random() > 0.7 : Math.random() > 0.3;
+    const srcIp = isInternal ? randChoice(internalIPs) : randChoice(externalIPs);
+    const dstIp = isInternal ? randChoice(internalIPs) : "2.2.2.2";
+
+    const hour = attackMode ? randInt(0, 5) : randInt(8, 20);
+    const date = `2026-03-21T${String(hour).padStart(2,'0')}:${String(randInt(0,59)).padStart(2,'0')}`;
+
+    const bytesSent     = attackMode ? randInt(100, 2000)    : randInt(500, 50000);
+    const bytesReceived = attackMode ? randInt(0, 500)       : randInt(1000, 100000);
+
+    document.getElementById('src_ip').value = srcIp;
+    document.getElementById('dst_ip').value = dstIp;
+    document.getElementById('src_port').value = srcPort;
+    document.getElementById('dst_port').value = dstPort;
+    document.getElementById('protocol').value = 'TCP';
+    document.getElementById('bytes_sent').value = bytesSent;
+    document.getElementById('bytes_received').value = bytesReceived;
+    document.getElementById('user_agent').value = attackMode ? randChoice(attackAgents) : randChoice(normalAgents);
+    document.getElementById('url').value = attackMode ? `http://${dstIp}/shell` : `https://example.com`;
+    document.getElementById('is_internal_traffic').checked = isInternal;
+    document.getElementById('timestamp').value = date;
+  }
+
+  function loadPreset(name) {
+    const p = presets[name];
+    if (!p) return;
+    document.getElementById('src_ip').value = p.src_ip;
+    document.getElementById('dst_ip').value = p.dst_ip;
+    document.getElementById('src_port').value = p.src_port;
+    document.getElementById('dst_port').value = p.dst_port;
+    document.getElementById('protocol').value = p.protocol;
+    document.getElementById('bytes_sent').value = p.bytes_sent;
+    document.getElementById('bytes_received').value = p.bytes_received;
+    document.getElementById('user_agent').value = p.user_agent;
+    document.getElementById('url').value = p.url;
+    document.getElementById('is_internal_traffic').checked = p.is_internal_traffic;
+    document.getElementById('timestamp').value = p.timestamp;
+  }
+
+  let stats = { total: 0, attacks: 0, safe: 0 };
+
+  function updateStats() {
+    document.getElementById('statTotal').textContent = stats.total;
+    document.getElementById('statAttacks').textContent = stats.attacks;
+    document.getElementById('statSafe').textContent = stats.safe;
+  }
+
+  function showAlert(isAttack, prob) {
+    const el = document.getElementById('alertFlash');
+    el.textContent = isAttack
+      ? `⚠ THREAT DETECTED — ${(prob * 100).toFixed(1)}% confidence`
+      : `✓ CLEAN TRAFFIC — ${(prob * 100).toFixed(1)}% threat probability`;
+    el.className = `alert-flash ${isAttack ? 'attack-alert' : 'safe-alert'} show`;
+    setTimeout(() => el.classList.remove('show'), 3500);
+  }
+
+  function setGauge(prob, isAttack) {
+    const fill = document.getElementById('gaugeFill');
+    const val = document.getElementById('gaugeValue');
+    const arcLength = 314; // half-circle circumference approx
+    const offset = arcLength - (prob * arcLength);
+    fill.style.strokeDashoffset = offset;
+    fill.style.stroke = isAttack ? 'var(--accent2)' : 'var(--safe)';
+    val.textContent = `${(prob * 100).toFixed(0)}%`;
+    val.style.fill = isAttack ? 'var(--accent2)' : 'var(--safe)';
+  }
+
+  function addLogEntry(data, result) {
+    const container = document.getElementById('logContainer');
+    const empty = container.querySelector('.empty-log');
+    if (empty) empty.remove();
+
+    const isAttack = result.is_attack === 1;
+    const prob = result.probability;
+    const probClass = prob >= 0.7 ? 'high' : prob >= 0.4 ? 'medium' : 'low';
+    const now = new Date().toLocaleTimeString();
+
+    const entry = document.createElement('div');
+    entry.className = `log-entry ${isAttack ? 'attack-entry' : 'safe-entry'}`;
+    entry.innerHTML = `
+      <span class="log-time">${now}</span>
+      <span class="log-badge ${isAttack ? 'attack' : 'safe'}">${isAttack ? 'ATTACK' : 'CLEAN'}</span>
+      <span class="log-info">${data.src_ip}:${data.src_port} → ${data.dst_ip}:${data.dst_port} [${data.protocol}]</span>
+      <span class="log-prob ${probClass}">${(prob * 100).toFixed(1)}%</span>
+    `;
+    container.insertBefore(entry, container.firstChild);
+  }
+
+  async function submitPrediction() {
+    const btn = document.getElementById('submitBtn');
+    const errMsg = document.getElementById('errorMsg');
+    errMsg.style.display = 'none';
+
+    const rawTimestamp = document.getElementById('timestamp').value;
+    const ts = rawTimestamp.replace('T', ' ') + ':00';
+
+    const payload = {
+      timestamp: ts,
+      src_ip: document.getElementById('src_ip').value,
+      dst_ip: document.getElementById('dst_ip').value,
+      src_port: parseInt(document.getElementById('src_port').value),
+      dst_port: parseInt(document.getElementById('dst_port').value),
+      protocol: document.getElementById('protocol').value,
+      bytes_sent: parseInt(document.getElementById('bytes_sent').value),
+      bytes_received: parseInt(document.getElementById('bytes_received').value),
+      user_agent: document.getElementById('user_agent').value,
+      url: document.getElementById('url').value,
+      is_internal_traffic: document.getElementById('is_internal_traffic').checked,
+    };
+
+    const apiUrl = "https://aidi-1003-cybershield.onrender.com/predict";
+
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span> Analyzing...';
+
+    try {
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      const result = await response.json();
+
+      if (!response.ok || result.error) {
+        throw new Error(result.error || 'API error');
+      }
+
+      const isAttack = result.is_attack === 1;
+      const prob = result.probability;
+
+      // Show result
+      document.getElementById('idleState').style.display = 'none';
+      const card = document.getElementById('resultCard');
+      card.style.display = 'block';
+      card.style.animation = 'none';
+      void card.offsetWidth;
+      card.style.animation = 'fadeUp 0.5s ease forwards';
+
+      const label = document.getElementById('threatLabel');
+      label.textContent = isAttack ? '⚠ THREAT DETECTED' : '✓ CLEAN TRAFFIC';
+      label.className = `threat-label ${isAttack ? 'attack' : 'safe'}`;
+
+      document.getElementById('probValue').textContent = `${(prob * 100).toFixed(2)}%`;
+      setGauge(prob, isAttack);
+      setRiskBar(prob, isAttack);
+
+      // Stats
+      stats.total++;
+      if (isAttack) stats.attacks++; else stats.safe++;
+      updateStats();
+
+      addLogEntry(payload, result);
+      showAlert(isAttack, prob);
+
+    } catch (err) {
+      errMsg.textContent = `Error: ${err.message}. Make sure your Flask server is running with CORS enabled.`;
+      errMsg.style.display = 'block';
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = 'Analyze Packet';
+    }
+  }
+</script>
+
+</body>
+</html>
